@@ -1,72 +1,39 @@
 import { MongoClient } from "mongodb";
 
-const localUri = process.env.MONGODB_LOCAL_URI ?? process.env.MONGODB_URI;
-const atlasUri = process.env.MONGODB_ATLAS_URI ?? process.env.MONGODB_URI;
-const dbName = process.env.MONGODB_DB ?? "ecommerce2";
+const uri = process.env.MONGODB_ATLAS_URI;
+const dbName = process.env.MONGODB_DB || "ecommerce2";
 
-export type MongoConnection = {
-  client: MongoClient;
-  db: ReturnType<MongoClient["db"]>;
-};
-
-type MongoCache = {
-  client: MongoClient | null;
-  promise: Promise<MongoClient> | null;
-};
-
-declare global {
-  var _mongoLocalCache: MongoCache | undefined;
-  var _mongoAtlasCache: MongoCache | undefined;
+if (!uri) {
+  throw new Error("Please define the MONGODB_ATLAS_URI environment variable inside .env.production");
 }
 
-const globalCache = globalThis as typeof globalThis & {
-  _mongoLocalCache?: MongoCache;
-  _mongoAtlasCache?: MongoCache;
+/**
+ * globalWithMongo is marked 'const' to satisfy ESLint.
+ * It caches the connection promise in development to prevent connection leaks.
+ */
+const globalWithMongo = global as typeof globalThis & {
+  _mongoClientPromise?: Promise<MongoClient>;
 };
 
-if (!globalCache._mongoLocalCache) {
-  globalCache._mongoLocalCache = { client: null, promise: null };
-}
+let clientPromise: Promise<MongoClient>;
 
-if (!globalCache._mongoAtlasCache) {
-  globalCache._mongoAtlasCache = { client: null, promise: null };
-}
-
-const options = {
-  maxPoolSize: 10,
-  serverSelectionTimeoutMS: 5000,
-};
-
-async function getClient(uri: string, cache: MongoCache): Promise<MongoClient> {
-  if (!cache.promise) {
-    const client = new MongoClient(uri, options);
-    cache.client = client;
-    cache.promise = client.connect();
+if (process.env.NODE_ENV === "development") {
+  // In development mode, use a global variable to preserve the connection
+  if (!globalWithMongo._mongoClientPromise) {
+    const client = new MongoClient(uri);
+    globalWithMongo._mongoClientPromise = client.connect();
   }
-
-  return cache.promise;
+  clientPromise = globalWithMongo._mongoClientPromise;
+} else {
+  // In production mode, it's best to not use a global variable.
+  const client = new MongoClient(uri);
+  clientPromise = client.connect();
 }
 
-export async function connectToLocalDatabase(): Promise<MongoConnection> {
-  if (!localUri) {
-    throw new Error(
-      "Please define MONGODB_LOCAL_URI or MONGODB_URI in your local environment."
-    );
-  }
-
-  const client = await getClient(localUri, globalCache._mongoLocalCache!);
-  return { client, db: client.db(dbName) };
+export async function connectToDatabase() {
+  const connection = await clientPromise;
+  const db = connection.db(dbName);
+  return { client: connection, db };
 }
 
-export async function connectToAtlasDatabase(): Promise<MongoConnection> {
-  if (!atlasUri) {
-    throw new Error(
-      "Please define MONGODB_ATLAS_URI in your production environment."
-    );
-  }
-
-  const client = await getClient(atlasUri, globalCache._mongoAtlasCache!);
-  return { client, db: client.db(dbName) };
-}
-
-export default connectToLocalDatabase;
+export default connectToDatabase;
