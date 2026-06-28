@@ -34,6 +34,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
         <p className="mt-6 text-center text-sm text-slate-400">
           New here? <Link href="/signup" className="text-cyan-400 hover:underline">Create account</Link>
         </p>
+
+        <Link href="/forgot-password" className="text-xs text-cyan-400 hover:underline">Forgot password?</Link>
+        
       </section>
     </main>
   );

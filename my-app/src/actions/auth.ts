@@ -3,7 +3,9 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import jwt from "jsonwebtoken";
+import crypto from "crypto"; // Built-in Node.js module
 import { connectToDatabase } from "@/lib/dbconnect";
+import { sendEmail } from "@/lib/mailer"; // Your mailer utility
 import {
   comparePassword,
   hashPassword,
@@ -12,7 +14,9 @@ import {
 } from "@/lib/models/user";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123";
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
+// --- SIGNUP ACTION ---
 export async function signupAction(formData: FormData) {
   let success = false;
   let errorMessage = "";
@@ -32,14 +36,29 @@ export async function signupAction(formData: FormData) {
       errorMessage = "Username or email already exists";
     } else {
       const hashedPassword = await hashPassword(payload.password);
+      const verificationToken = crypto.randomBytes(32).toString("hex");
+
       await db.collection("users").insertOne({
         username: payload.username,
         name: payload.name,
         email: payload.email,
         password: hashedPassword,
         role: isAdmin ? "admin" : "client",
+        isVerified: false, // User starts unverified
+        verificationToken,
         createdAt: new Date(),
       });
+
+      // Send Verification Email
+      const verifyUrl = `${BASE_URL}/verify-email?token=${verificationToken}&email=${payload.email}`;
+      await sendEmail(
+        payload.email,
+        "Verify your Email - Next E-Commerce",
+        `<h1>Welcome ${payload.name}!</h1>
+         <p>Please click the link below to verify your account:</p>
+         <a href="${verifyUrl}">${verifyUrl}</a>`
+      );
+
       success = true;
     }
   } catch (error: unknown) {
@@ -47,12 +66,13 @@ export async function signupAction(formData: FormData) {
   }
 
   if (success) {
-    redirect("/login?message=Account+created+successfully");
+    redirect("/login?message=Account+created.+Please+check+your+email+to+verify.");
   } else {
     redirect(`/signup?error=${encodeURIComponent(errorMessage)}`);
   }
 }
 
+// --- LOGIN ACTION ---
 export async function loginAction(formData: FormData) {
   let targetRoute = "";
   let errorMessage = "";
@@ -66,6 +86,9 @@ export async function loginAction(formData: FormData) {
 
     if (!user || !(await comparePassword(payload.password, user.password as string))) {
       errorMessage = "Invalid username or password";
+    } else if (!user.isVerified) {
+      // Check if user is verified
+      errorMessage = "Please verify your email before logging in.";
     } else {
       const token = jwt.sign(
         { sub: user._id.toString(), username: user.username, role: user.role },
@@ -92,5 +115,72 @@ export async function loginAction(formData: FormData) {
     redirect(targetRoute);
   } else {
     redirect(`/login?error=${encodeURIComponent(errorMessage)}`);
+  }
+}
+
+// --- FORGOT PASSWORD ACTION ---
+export async function forgotPasswordAction(formData: FormData) {
+  const email = formData.get("email") as string;
+  
+  try {
+    const { db } = await connectToDatabase();
+    const user = await db.collection("users").findOne({ email });
+
+    if (user) {
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      const resetExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+
+      await db.collection("users").updateOne(
+        { email },
+        { $set: { resetToken, resetExpiry } }
+      );
+
+      const resetUrl = `${BASE_URL}/reset-password?token=${resetToken}&email=${email}`;
+      await sendEmail(
+        email,
+        "Password Reset Request",
+        `<p>You requested a password reset. Click the link below to set a new password. This link expires in 1 hour.</p>
+         <a href="${resetUrl}">${resetUrl}</a>`
+      );
+    }
+  } catch (error) {
+    console.error("Forgot password error:", error);
+  }
+
+  // We redirect with a success message regardless of whether the email exists for security
+  redirect("/login?message=If+an+account+exists,+a+reset+link+has+been+sent.");
+}
+
+// --- RESET PASSWORD ACTION ---
+export async function resetPasswordAction(formData: FormData) {
+  const email = formData.get("email") as string;
+  const token = formData.get("token") as string;
+  const newPassword = formData.get("password") as string;
+
+  try {
+    const { db } = await connectToDatabase();
+    const user = await db.collection("users").findOne({ 
+      email, 
+      resetToken: token, 
+      resetExpiry: { $gt: new Date() } // Check if token is not expired
+    });
+
+    if (!user) {
+      redirect("/login?error=Invalid+or+expired+reset+link.");
+    }
+
+    const hashedPassword = await hashPassword(newPassword);
+    await db.collection("users").updateOne(
+      { _id: user._id },
+      { 
+        $set: { password: hashedPassword },
+        $unset: { resetToken: "", resetExpiry: "" } // Clear reset fields
+      }
+    );
+
+    redirect("/login?message=Password+successfully+updated.+You+can+now+login.");
+  } catch {
+    // Omitting the 'error' variable satisfies the @typescript-eslint/no-unused-vars rule
+    redirect("/login?error=Something+went+wrong+during+password+reset.");
   }
 }
