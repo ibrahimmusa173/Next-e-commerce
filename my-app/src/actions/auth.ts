@@ -152,35 +152,49 @@ export async function forgotPasswordAction(formData: FormData) {
 }
 
 // --- RESET PASSWORD ACTION ---
+import { isRedirectError } from "next/dist/client/components/redirect-error";
+
 export async function resetPasswordAction(formData: FormData) {
-  const email = formData.get("email") as string;
+  const email = (formData.get("email") as string)?.toLowerCase(); // Normalize email
   const token = formData.get("token") as string;
   const newPassword = formData.get("password") as string;
 
   try {
     const { db } = await connectToDatabase();
+    
+    // 1. Find the user with matching token and check if expiry is still in the future
     const user = await db.collection("users").findOne({ 
       email, 
       resetToken: token, 
-      resetExpiry: { $gt: new Date() } // Check if token is not expired
+      resetExpiry: { $gt: new Date() } 
     });
 
     if (!user) {
       redirect("/login?error=Invalid+or+expired+reset+link.");
     }
 
+    // 2. Hash the new password
     const hashedPassword = await hashPassword(newPassword);
+
+    // 3. Update the password and clear the reset fields
     await db.collection("users").updateOne(
       { _id: user._id },
       { 
         $set: { password: hashedPassword },
-        $unset: { resetToken: "", resetExpiry: "" } // Clear reset fields
+        $unset: { resetToken: "", resetExpiry: "" } 
       }
     );
 
+    // 4. Success redirect
     redirect("/login?message=Password+successfully+updated.+You+can+now+login.");
-  } catch {
-    // Omitting the 'error' variable satisfies the @typescript-eslint/no-unused-vars rule
+
+  } catch (error: unknown) {
+    // Check if the thrown error is an internal Next.js redirect
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    
+    console.error("Reset Password Error:", error);
     redirect("/login?error=Something+went+wrong+during+password+reset.");
   }
 }
