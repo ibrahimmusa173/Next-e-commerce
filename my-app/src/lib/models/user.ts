@@ -2,11 +2,19 @@ import bcrypt from "bcryptjs";
 
 export type UserRole = "client" | "admin";
 
+// Existing payload for standard Email/Password signups
 export interface UserPayload {
   username?: string;
   name?: string;
   email?: string;
   password?: string;
+}
+
+// NEW: Interface specifically for users logging in via Google OAuth
+export interface GoogleUserPayload {
+  name: string;
+  email: string;
+  image?: string;
 }
 
 export function validateUserPayload(input: UserPayload) {
@@ -29,6 +37,29 @@ export function validateUserPayload(input: UserPayload) {
   }
 
   return { username, name, email, password };
+}
+
+// NEW: Sanitizes and prepares incoming Google profile data for your database
+export function validateAndPrepareGoogleUser(input: GoogleUserPayload) {
+  const email = input.email.trim().toLowerCase();
+  
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("Invalid Google email received.");
+  }
+
+  // Generate a safe fallback username from their email prefix since Google doesn't provide one
+  const emailPrefix = email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "");
+  const fallbackUsername = `${emailPrefix}_gg`; 
+
+  return {
+    username: fallbackUsername,
+    name: input.name.trim() || "Google User",
+    email,
+    image: input.image || "",
+    role: "client" as UserRole,
+    authProvider: "google", // Helps differentiate from standard credential users
+    createdAt: new Date(),
+  };
 }
 
 export function validateLoginPayload(input: { username?: string; password?: string }) {

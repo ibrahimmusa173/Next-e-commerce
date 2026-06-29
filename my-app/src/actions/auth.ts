@@ -1,5 +1,6 @@
 "use server";
 
+import { signIn, signOut } from "@/auth";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import jwt from "jsonwebtoken";
@@ -197,4 +198,19 @@ export async function resetPasswordAction(formData: FormData) {
     console.error("Reset Password Error:", error);
     redirect("/login?error=Something+went+wrong+during+password+reset.");
   }
+}
+
+
+
+export async function loginWithGoogle() {
+  try {
+    await signIn("google", { redirectTo: "/client-dashboard" });
+  } catch (error) {
+    // Next.js redirect errors need to be thrown normally
+    throw error;
+  }
+}
+
+export async function logout() {
+  await signOut({ redirectTo: "/login" });
 }
