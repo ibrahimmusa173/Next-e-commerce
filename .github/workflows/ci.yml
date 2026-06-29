@@ -23,11 +23,15 @@ jobs:
 
     - name: Install dependencies
       working-directory: ./my-app
-      run: npm ci
+      # Added flag to override the strict npm peer dependency lock
+      run: npm ci --legacy-peer-deps
 
     - name: Run Next.js Build Check
       working-directory: ./my-app
       env:
-        # Match your exact environment variable name
         MONGODB_ATLAS_URI: ${{ secrets.MONGODB_ATLAS_URI }}
+        # Added build-time environment variable fallbacks for NextAuth v5
+        AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'dummy_build_secret_32_chars_long_minimum' }}
+        AUTH_GOOGLE_ID: ${{ secrets.AUTH_GOOGLE_ID || 'dummy_id' }}
+        AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET || 'dummy_secret' }}
       run: npm run build
