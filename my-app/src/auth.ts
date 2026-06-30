@@ -5,7 +5,6 @@ import type { Session, Profile } from "next-auth";
 import connectToDatabase from "@/lib/dbconnect";
 import { validateAndPrepareGoogleUser } from "@/lib/models/user";
 
-// Strictly type custom properties on the user session interface
 declare module "next-auth" {
   interface Session {
     user: {
@@ -27,7 +26,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    // Removed the unused 'account' property to satisfy the strict ESLint rule
     async signIn({ profile }: { profile?: Profile & { picture?: string } }) {
       if (!profile || !profile.email) {
         console.error("Sign in failed: No profile data returned from Google.");
@@ -59,20 +57,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return false; 
       }
     },
+    
+    // ADD THIS CALLBACK: Extracts role from DB during token generation/checks for Middleware
+   async jwt({ token }) {
+      if (token.email) {
+        try {
+          const { db } = await connectToDatabase();
+          const userData = await db.collection("users").findOne({ email: token.email.toLowerCase() });
+          if (userData) {
+            token.role = userData.role || "client";
+            token.username = userData.username;
+          }
+        } catch (err) {
+          console.error("Failed to query role for middleware JWT token:", err);
+        }
+      }
+      return token;
+    },
+
     async session({ session, token }: { session: Session; token: JWT }) {
       if (session.user) {
         session.user.id = token.sub ?? "";
-        
-        try {
-          const { db } = await connectToDatabase();
-          const userData = await db.collection("users").findOne({ email: session.user.email?.toLowerCase() });
-          if (userData) {
-            session.user.role = userData.role || "client";
-            session.user.username = userData.username;
-          }
-        } catch (err) {
-          console.error("Failed to append user profile fields to session context:", err);
-        }
+        // Read directly from the updated token instead of hitting the DB a second time
+        session.user.role = (token.role as string) || "client";
+        session.user.username = token.username as string;
       }
       return session;
     },

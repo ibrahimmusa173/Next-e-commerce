@@ -211,6 +211,12 @@ export async function loginWithGoogle() {
   }
 }
 
+// --- LOGOUT ACTION ---
 export async function logout() {
+  // 1. Delete the custom credentials token cookie layout completely
+  const cookieStore = await cookies();
+  cookieStore.delete("auth_token");
+
+  // 2. Clear Google OAuth profiles sessions cleanly through NextAuth
   await signOut({ redirectTo: "/login" });
 }
