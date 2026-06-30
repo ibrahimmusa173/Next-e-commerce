@@ -35,7 +35,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       try {
         const { db } = await connectToDatabase();
         const usersCollection = db.collection("users");
-
         const existingUser = await usersCollection.findOne({ email: profile.email.toLowerCase() });
 
         if (!existingUser) {
@@ -58,18 +57,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
     },
     
-    // ADD THIS CALLBACK: Extracts role from DB during token generation/checks for Middleware
-   async jwt({ token }) {
-      if (token.email) {
+    // Fixed: Removed '_user' from the destructuring list to clear the ESLint flag
+    async jwt({ token }) {
+      if (!token.role) {
         try {
           const { db } = await connectToDatabase();
-          const userData = await db.collection("users").findOne({ email: token.email.toLowerCase() });
+          const userData = await db.collection("users").findOne({ email: token.email?.toLowerCase() });
           if (userData) {
             token.role = userData.role || "client";
             token.username = userData.username;
           }
-        } catch (err) {
-          console.error("Failed to query role for middleware JWT token:", err);
+        } catch {
+          // Fixed: Removed the unused 'err' parameter variable binding name completely
+          token.role = "client"; 
         }
       }
       return token;
@@ -78,7 +78,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, token }: { session: Session; token: JWT }) {
       if (session.user) {
         session.user.id = token.sub ?? "";
-        // Read directly from the updated token instead of hitting the DB a second time
         session.user.role = (token.role as string) || "client";
         session.user.username = token.username as string;
       }

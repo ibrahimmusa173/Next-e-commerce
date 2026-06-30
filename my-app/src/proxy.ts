@@ -5,7 +5,7 @@ import { jwtVerify } from "jose";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   let resolvedRole: string | null = null;
   let isAuthenticated = false;
@@ -15,7 +15,6 @@ export async function middleware(request: NextRequest) {
 
   if (customAuthCookie) {
     try {
-      // Decode statelessly using the edge-compatible 'jose' module
       const secretKey = new TextEncoder().encode(JWT_SECRET);
       const { payload } = await jwtVerify(customAuthCookie, secretKey);
       
@@ -24,46 +23,41 @@ export async function middleware(request: NextRequest) {
         isAuthenticated = true;
       }
     } catch (error) {
-      console.error("Credentials JWT verification failed or expired in middleware:", error);
+      console.error("Credentials token decryption skipped or invalid:", error);
     }
   }
 
-  // --- STRATEGY B: Check for Google NextAuth Session (If Credentials Not Found) ---
+  // --- STRATEGY B: Check for Google NextAuth Session ---
   if (!isAuthenticated) {
-    const nextAuthSession = await nextAuthHandler();
-    if (nextAuthSession?.user) {
-      resolvedRole = nextAuthSession.user.role || "client";
-      isAuthenticated = true;
+    try {
+      const nextAuthSession = await nextAuthHandler();
+      if (nextAuthSession?.user) {
+        resolvedRole = nextAuthSession.user.role || "client";
+        isAuthenticated = true;
+      }
+    } catch (error) {
+      console.error("NextAuth session check errored at the edge:", error);
     }
   }
 
   // --- SECURITY ENFORCEMENT RULES ---
-
-  // 1. UNUATHENTICATED BLOCK: Redirect away if both checks fail
   if (!isAuthenticated || !resolvedRole) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("error", "Please sign in to view this dashboard.");
+    loginUrl.searchParams.set("error", "Authentication required.");
     return NextResponse.redirect(loginUrl);
   }
 
-  // 2. ADMIN PROTECTION
-  if (pathname.startsWith("/admin-dashboard")) {
-    if (resolvedRole !== "admin") {
-      return NextResponse.redirect(new URL("/client-dashboard", request.url));
-    }
+  if (pathname.startsWith("/admin-dashboard") && resolvedRole !== "admin") {
+    return NextResponse.redirect(new URL("/client-dashboard", request.url));
   }
 
-  // 3. CLIENT PROTECTION
-  if (pathname.startsWith("/client-dashboard")) {
-    if (resolvedRole !== "client") {
-      return NextResponse.redirect(new URL("/admin-dashboard", request.url));
-    }
+  if (pathname.startsWith("/client-dashboard") && resolvedRole !== "client") {
+    return NextResponse.redirect(new URL("/admin-dashboard", request.url));
   }
 
   return NextResponse.next();
 }
 
-// Ensure this middleware intercepts only your target routes
 export const config = {
   matcher: [
     "/admin-dashboard/:path*",
