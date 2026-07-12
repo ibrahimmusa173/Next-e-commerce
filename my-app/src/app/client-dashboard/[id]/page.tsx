@@ -1,30 +1,35 @@
-// src/app/client-dashboard/[id]/page.tsx
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProductById } from "@/actions/productActions";
 
-interface DetailProps {
-  params: { id: string };
+// Logic: We must define the Props specifically for Next.js 15
+interface ProductPageProps {
+  params: Promise<{ id: string }>;
 }
 
-export default async function ProductDetailsPage({ params }: DetailProps) {
-  const product = await getProductById(params.id);
+export default async function ProductDetailsPage({ params }: ProductPageProps) {
+  // 1. Await the params to get the ID (Required in Next.js 15)
+  const { id } = await params;
 
+  // 2. Fetch the data from MongoDB
+  const product = await getProductById(id);
+
+  // 3. If the DB returns null, trigger the 404 explicitly
   if (!product) {
-    return notFound();
+    notFound();
   }
 
   return (
-    <main className="min-h-screen bg-white p-6 md:p-20">
+    <main className="min-h-screen bg-white p-8 md:p-16">
       <div className="max-w-6xl mx-auto">
-        <Link href="/client-dashboard" className="text-cyan-600 hover:underline mb-8 inline-block font-medium">
-          ← Back to Dashboard
+        <Link href="/client-dashboard" className="text-cyan-600 hover:text-cyan-700 mb-8 inline-block font-medium">
+          ← Back to Catalog
         </Link>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mt-4">
-          {/* Image Section */}
-          <div className="relative h-[400px] md:h-[600px] w-full rounded-3xl overflow-hidden shadow-2xl border border-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
+          {/* Image container */}
+          <div className="relative aspect-square w-full rounded-2xl overflow-hidden shadow-xl border">
             <Image
               src={product.image}
               alt={product.name}
@@ -34,26 +39,26 @@ export default async function ProductDetailsPage({ params }: DetailProps) {
             />
           </div>
 
-          {/* Content Section */}
-          <div className="flex flex-col justify-center">
-            <span className="text-cyan-600 font-bold tracking-widest uppercase text-sm">
+          {/* Details container */}
+          <div className="flex flex-col justify-start py-4">
+            <span className="text-sm font-bold text-cyan-600 uppercase tracking-widest">
               {product.category}
             </span>
-            <h1 className="text-5xl font-black text-gray-900 mt-4 leading-tight">
+            <h1 className="text-4xl font-extrabold text-slate-900 mt-2">
               {product.name}
             </h1>
-            <p className="text-4xl font-light text-gray-500 mt-4">
+            <p className="text-3xl font-light text-slate-500 mt-4">
               ${product.price.toLocaleString()}
             </p>
             
-            <div className="mt-10 pt-10 border-t border-gray-100">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Product Description</h3>
-              <p className="text-gray-600 leading-relaxed text-lg whitespace-pre-wrap">
+            <div className="mt-10 pt-8 border-t border-slate-100">
+              <h3 className="text-lg font-semibold text-slate-900">Description</h3>
+              <p className="mt-4 text-slate-600 leading-relaxed text-lg whitespace-pre-line">
                 {product.description}
               </p>
             </div>
 
-            <button className="mt-12 w-full md:w-max px-12 py-4 bg-cyan-600 text-white rounded-2xl font-bold text-xl hover:bg-cyan-700 hover:-translate-y-1 transition-all shadow-xl shadow-cyan-100">
+            <button className="mt-12 w-full bg-cyan-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-cyan-700 transition-all shadow-lg">
               Add to Shopping Cart
             </button>
           </div>
