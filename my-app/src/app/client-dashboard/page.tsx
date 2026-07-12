@@ -1,79 +1,72 @@
-// src/app/client-dashboard/page.tsx
-import Link from "next/link";
+// src/app/client-dashboard/[id]/page.tsx
 import Image from "next/image";
-import { getProducts } from "@/actions/productActions";
+import Link from "next/link";
+import { getProductById } from "@/actions/productActions";
 
-interface DashboardProps {
-  searchParams: { page?: string };
+interface DetailProps {
+  params: Promise<{ id: string }> | { id: string }; // Handles both Next 14 and 15
 }
 
-export default async function ClientDashboard({ searchParams }: DashboardProps) {
-  // Logic: Default to page 1 if no parameter is provided
-  const currentPage = Number(searchParams.page) || 1;
-  const { products, totalPages } = await getProducts(currentPage);
+export default async function ProductDetailsPage({ params }: DetailProps) {
+  // 1. Safely extract the ID
+  const resolvedParams = await params;
+  const id = resolvedParams.id;
+  
+  // 2. Fetch the product
+  const product = await getProductById(id);
+
+  // 3. DEBUG: If not found, show the ID instead of 404
+  if (!product) {
+    return (
+      <div className="p-20 text-center">
+        <h1 className="text-2xl font-bold text-red-600">Product Not Found!</h1>
+        <p className="mt-4 text-gray-600">The route is working, but the ID <span className="font-mono bg-gray-100 p-1">{id}</span> does not exist in the database Vercel is connected to.</p>
+        <Link href="/client-dashboard" className="text-cyan-600 underline mt-4 block">Return to Dashboard</Link>
+      </div>
+    );
+  }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6 md:p-12">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Our Products</h1>
+    <main className="min-h-screen bg-white p-6 md:p-20">
+      <div className="max-w-6xl mx-auto">
+        <Link href="/client-dashboard" className="text-cyan-600 hover:underline mb-8 inline-block font-medium">
+          ← Back to Dashboard
+        </Link>
 
-        {/* 9 Product Grid (3 columns on desktop) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {products.map((product) => (
-            <Link 
-              href={`/client-dashboard/${product._id}`} 
-              key={product._id}
-              className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow border border-gray-100"
-            >
-              <div className="relative h-64 w-full bg-gray-200">
-                <Image
-                  src={product.image}
-                  alt={product.name}
-                  fill
-                  className="object-cover group-hover:scale-105 transition-transform duration-300"
-                  unoptimized
-                />
-              </div>
-              <div className="p-5">
-                <span className="text-xs font-semibold text-cyan-600 uppercase tracking-wider">
-                  {product.category}
-                </span>
-                <h2 className="text-xl font-bold text-gray-800 mt-1 truncate">
-                  {product.name}
-                </h2>
-                <p className="text-2xl font-black text-gray-900 mt-2">
-                  ${product.price.toLocaleString()}
-                </p>
-                <button className="w-full mt-4 bg-gray-900 text-white py-2 rounded-lg font-medium group-hover:bg-cyan-600 transition-colors">
-                  View Details
-                </button>
-              </div>
-            </Link>
-          ))}
-        </div>
-
-        {/* Pagination Logic */}
-        {totalPages > 1 && (
-          <div className="mt-16 flex justify-center items-center gap-2">
-            {Array.from({ length: totalPages }, (_, i) => {
-              const pageNum = i + 1;
-              const isActive = currentPage === pageNum;
-              return (
-                <Link
-                  key={pageNum}
-                  href={`/client-dashboard?page=${pageNum}`}
-                  className={`w-10 h-10 flex items-center justify-center rounded-lg font-bold transition-all ${
-                    isActive 
-                    ? "bg-cyan-600 text-white shadow-lg shadow-cyan-200" 
-                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
-                  }`}
-                >
-                  {pageNum}
-                </Link>
-              );
-            })}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mt-4">
+          <div className="relative h-[400px] md:h-[600px] w-full rounded-3xl overflow-hidden shadow-2xl border border-gray-100">
+            <Image
+              src={product.image}
+              alt={product.name}
+              fill
+              className="object-cover"
+              unoptimized
+            />
           </div>
-        )}
+
+          <div className="flex flex-col justify-center">
+            <span className="text-cyan-600 font-bold tracking-widest uppercase text-sm">
+              {product.category}
+            </span>
+            <h1 className="text-5xl font-black text-gray-900 mt-4 leading-tight">
+              {product.name}
+            </h1>
+            <p className="text-4xl font-light text-gray-500 mt-4">
+              ${product.price.toLocaleString()}
+            </p>
+            
+            <div className="mt-10 pt-10 border-t border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Product Description</h3>
+              <p className="text-gray-600 leading-relaxed text-lg whitespace-pre-wrap">
+                {product.description}
+              </p>
+            </div>
+            
+            <button className="mt-12 px-12 py-4 bg-cyan-600 text-white rounded-2xl font-bold text-xl hover:bg-cyan-700 transition-all">
+              Add to Cart
+            </button>
+          </div>
+        </div>
       </div>
     </main>
   );
