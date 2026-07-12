@@ -1,7 +1,9 @@
-// src/models/Product.ts
-import { Schema, model, models } from "mongoose";
+// src/lib/models/Product.ts
+import { Schema, model, models, Document } from "mongoose";
 
+// 1. Define the base structure of a Product
 export interface IProduct {
+  _id: string; 
   name: string;
   description: string;
   price: number;
@@ -10,16 +12,19 @@ export interface IProduct {
   createdAt: Date;
 }
 
-const ProductSchema = new Schema<IProduct>({
+// 2. Define the Mongoose Document type (omit _id to avoid the conflict error)
+export interface IProductDocument extends Omit<IProduct, "_id">, Document {}
+
+const ProductSchema = new Schema<IProductDocument>({
   name: { type: String, required: true },
   description: { type: String, required: true },
   price: { type: Number, required: true },
   category: { type: String, required: true },
-  image: { type: String, required: true }, // Store URL of the image
+  image: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
 });
 
-// Use existing model if available (Next.js hot reloading fix)
-const Product = models.Product || model<IProduct>("Product", ProductSchema);
+// 3. Create the model
+const Product = models.Product || model<IProductDocument>("Product", ProductSchema);
 
 export default Product;
