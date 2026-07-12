@@ -2,54 +2,61 @@
 import Link from "next/link";
 import Image from "next/image";
 import { getProducts } from "@/actions/productActions";
-import { IProduct } from "@/lib/models/Product"; // Ensure this path matches your model folder
+import { IProduct } from "@/lib/models/Product"; 
 
-// Logic: Strictly define the props for Next.js 15 (searchParams is a Promise)
 interface DashboardProps {
   searchParams: Promise<{ page?: string }>;
 }
 
 export default async function ClientDashboard({ searchParams }: DashboardProps) {
-  // 1. Resolve searchParams and get current page
   const resolvedParams = await searchParams;
   const currentPage = Number(resolvedParams.page) || 1;
-
-  // 2. Fetch products and total page count from MongoDB
   const { products, totalPages } = await getProducts(currentPage);
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6 md:p-12">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-slate-900 mb-8">Product Catalog</h1>
+    <main className="min-h-screen bg-slate-50 p-4 md:p-10">
+      <div className="max-w-[1400px] mx-auto">
+        
+        {/* Styled Title */}
+        <h1 className="text-4xl font-extrabold text-slate-900 mb-10 tracking-tight">
+          <span className="text-blue-600">Beautiful</span> Client Dashboard
+        </h1>
 
-        {/* 3. The Product Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+        {/* Improved Grid: 4 columns on large screens makes cards smaller */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {products.map((product: IProduct) => (
             <Link 
               href={`/client-dashboard/${product._id}`} 
               key={product._id.toString()}
-              className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all border border-slate-200"
+              className="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-200 flex flex-col"
             >
-              <div className="relative h-64 w-full bg-slate-100">
+              {/* Fixed Image Container: object-contain shows the FULL picture */}
+              <div className="relative h-48 w-full bg-white p-2">
                 <Image
                   src={product.image}
                   alt={product.name}
                   fill
-                  className="object-cover group-hover:scale-105 transition-transform duration-300"
-                  unoptimized // Required for Base64 images
+                  className="object-contain p-2 group-hover:scale-105 transition-transform duration-500"
+                  unoptimized
                 />
               </div>
-              <div className="p-5">
-                <span className="text-xs font-bold text-cyan-600 uppercase tracking-widest">
-                  {product.category}
-                </span>
-                <h2 className="text-xl font-bold text-slate-800 mt-1 truncate">
+
+              <div className="p-4 flex flex-col flex-grow border-t border-slate-50">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-[10px] font-bold text-blue-500 uppercase bg-blue-50 px-2 py-1 rounded">
+                    {product.category}
+                  </span>
+                </div>
+                
+                <h2 className="text-lg font-bold text-slate-800 line-clamp-1">
                   {product.name}
                 </h2>
-                <p className="text-2xl font-black text-slate-900 mt-2">
+                
+                <p className="text-xl font-black text-slate-900 mt-2">
                   ${product.price.toLocaleString()}
                 </p>
-                <div className="w-full mt-4 text-center bg-slate-900 text-white py-2 rounded-lg font-medium group-hover:bg-cyan-600 transition-colors">
+
+                <div className="mt-4 w-full text-sm bg-slate-900 text-white py-2 rounded-lg font-bold group-hover:bg-blue-600 transition-colors text-center">
                   View Full Details
                 </div>
               </div>
@@ -57,9 +64,9 @@ export default async function ClientDashboard({ searchParams }: DashboardProps) 
           ))}
         </div>
 
-        {/* 4. Pagination Logic */}
+        {/* Pagination */}
         {totalPages > 1 && (
-          <div className="mt-16 flex justify-center items-center gap-3">
+          <div className="mt-12 flex justify-center items-center gap-2">
             {Array.from({ length: totalPages }, (_, i) => {
               const pageNum = i + 1;
               const isActive = currentPage === pageNum;
@@ -67,10 +74,10 @@ export default async function ClientDashboard({ searchParams }: DashboardProps) 
                 <Link
                   key={pageNum}
                   href={`/client-dashboard?page=${pageNum}`}
-                  className={`w-12 h-12 flex items-center justify-center rounded-xl font-bold transition-all ${
+                  className={`w-10 h-10 flex items-center justify-center rounded-lg font-bold transition-all ${
                     isActive 
-                    ? "bg-cyan-600 text-white shadow-lg" 
-                    : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                    ? "bg-blue-600 text-white shadow-lg" 
+                    : "bg-white text-slate-500 hover:bg-slate-100 border border-slate-200"
                   }`}
                 >
                   {pageNum}
