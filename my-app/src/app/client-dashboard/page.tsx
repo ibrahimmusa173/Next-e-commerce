@@ -1,8 +1,8 @@
 // src/app/client-dashboard/page.tsx
 import Link from "next/link";
-import Image from "next/image";
 import { getProducts } from "@/actions/productActions";
-import { IProduct } from "@/lib/models/Product"; 
+import ProductCard from "@/app/components/client/ProductCard"; // Import the new component
+import { IProduct } from "@/lib/models/Product";
 
 interface DashboardProps {
   searchParams: Promise<{ page?: string }>;
@@ -14,59 +14,31 @@ export default async function ClientDashboard({ searchParams }: DashboardProps) 
   const { products, totalPages } = await getProducts(currentPage);
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4 md:p-10">
-      <div className="max-w-[1400px] mx-auto">
+    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-10">
+      {/* MAIN ADMIN-STYLE CONTAINER */}
+      <section className="mx-auto max-w-6xl rounded-[2.5rem] border border-slate-800 bg-slate-900/90 p-8 md:p-12 shadow-2xl shadow-slate-950/40">
         
-        {/* Styled Title */}
-        <h1 className="text-4xl font-extrabold text-slate-900 mb-10 tracking-tight">
-          <span className="text-blue-600">Beautiful</span> Client Dashboard
-        </h1>
+        {/* Header Section */}
+        <div className="flex justify-between items-center mb-10">
+          <div>
+            <h1 className="text-3xl font-semibold text-white">Client Dashboard</h1>
+            <p className="text-slate-400 text-sm mt-1">Browse and manage available products</p>
+          </div>
+          <Link href="/" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium transition-all">
+            Log Out
+          </Link>
+        </div>
 
-        {/* Improved Grid: 4 columns on large screens makes cards smaller */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        {/* Product Grid - 3 columns, smaller gap */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-6 border-t border-slate-800">
           {products.map((product: IProduct) => (
-            <Link 
-              href={`/client-dashboard/${product._id}`} 
-              key={product._id.toString()}
-              className="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-200 flex flex-col"
-            >
-              {/* Fixed Image Container: object-contain shows the FULL picture */}
-              <div className="relative h-48 w-full bg-white p-2">
-                <Image
-                  src={product.image}
-                  alt={product.name}
-                  fill
-                  className="object-contain p-2 group-hover:scale-105 transition-transform duration-500"
-                  unoptimized
-                />
-              </div>
-
-              <div className="p-4 flex flex-col flex-grow border-t border-slate-50">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-[10px] font-bold text-blue-500 uppercase bg-blue-50 px-2 py-1 rounded">
-                    {product.category}
-                  </span>
-                </div>
-                
-                <h2 className="text-lg font-bold text-slate-800 line-clamp-1">
-                  {product.name}
-                </h2>
-                
-                <p className="text-xl font-black text-slate-900 mt-2">
-                  ${product.price.toLocaleString()}
-                </p>
-
-                <div className="mt-4 w-full text-sm bg-slate-900 text-white py-2 rounded-lg font-bold group-hover:bg-blue-600 transition-colors text-center">
-                  View Full Details
-                </div>
-              </div>
-            </Link>
+            <ProductCard key={product._id.toString()} product={product} />
           ))}
         </div>
 
-        {/* Pagination */}
+        {/* Pagination Section */}
         {totalPages > 1 && (
-          <div className="mt-12 flex justify-center items-center gap-2">
+          <div className="mt-12 flex justify-center items-center gap-2 pt-8 border-t border-slate-800">
             {Array.from({ length: totalPages }, (_, i) => {
               const pageNum = i + 1;
               const isActive = currentPage === pageNum;
@@ -74,10 +46,10 @@ export default async function ClientDashboard({ searchParams }: DashboardProps) 
                 <Link
                   key={pageNum}
                   href={`/client-dashboard?page=${pageNum}`}
-                  className={`w-10 h-10 flex items-center justify-center rounded-lg font-bold transition-all ${
+                  className={`w-10 h-10 flex items-center justify-center rounded-xl font-bold transition-all ${
                     isActive 
-                    ? "bg-blue-600 text-white shadow-lg" 
-                    : "bg-white text-slate-500 hover:bg-slate-100 border border-slate-200"
+                    ? "bg-cyan-600 text-white shadow-lg shadow-cyan-900/40" 
+                    : "bg-slate-800 text-slate-500 hover:bg-slate-700 border border-slate-700"
                   }`}
                 >
                   {pageNum}
@@ -86,7 +58,7 @@ export default async function ClientDashboard({ searchParams }: DashboardProps) 
             })}
           </div>
         )}
-      </div>
+      </section>
     </main>
   );
 }
