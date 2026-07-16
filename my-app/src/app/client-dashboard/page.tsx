@@ -22,7 +22,7 @@ export default async function ClientDashboard({ searchParams }: DashboardProps) 
         <div className="flex justify-between items-center mb-10">
           <div>
             <h1 className="text-3xl font-semibold text-white">Client Dashboard</h1>
-            <p className="text-slate-400 text-sm mt-1">Browse and manage available products</p>
+            
           </div>
           <Link href="/" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium transition-all">
             Log Out
