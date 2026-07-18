@@ -6,30 +6,18 @@ import connectDB from "@/lib/mongoose";
 import Product from "@/lib/models/Product";
 import Order from "@/lib/models/Order";
 
-// Ensure the key exists before initializing
 const stripeKey = process.env.STRIPE_SECRET_KEY;
-if (!stripeKey) {
-  console.error("CRITICAL: STRIPE_SECRET_KEY is missing in environment variables");
-}
-const stripe = new Stripe(stripeKey as string);
+const stripe = new Stripe(stripeKey || "");
 
 export async function createCheckoutSession(productId: string) {
   try {
     await connectDB();
 
-    // 1. Get Product Details (Using .lean() for faster performance)
     const product = await Product.findById(productId).lean();
     if (!product) throw new Error("Product not found");
 
-    /**
-     * 2. ROBUST IMAGE VALIDATION
-     * We strictly check:
-     * - Is it a string?
-     * - Does it start with http (not data:base64)?
-     * - Is it under the character limit?
-     */
+    // Robust Image Validation
     const productImage = typeof product.image === "string" ? product.image.trim() : "";
-    
     const isValidUrl = 
       productImage.startsWith("http") && 
       !productImage.startsWith("data:") && 
@@ -37,7 +25,6 @@ export async function createCheckoutSession(productId: string) {
 
     const imagesArray = isValidUrl ? [productImage] : [];
 
-    // 3. Create Stripe Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -62,7 +49,6 @@ export async function createCheckoutSession(productId: string) {
       },
     });
 
-    // 4. Create Pending Order
     await Order.create({
       productId: product._id,
       amount: product.price,
@@ -72,12 +58,8 @@ export async function createCheckoutSession(productId: string) {
 
     return { url: session.url };
   } catch (error: unknown) {
-    // Log the error detail specifically for Vercel
     if (error instanceof Error) {
-      console.error("Stripe Checkout Session Error:", {
-        message: error.message,
-        productId,
-      });
+      console.error("Stripe Error:", error.message);
     }
     throw new Error("Could not initiate payment");
   }
