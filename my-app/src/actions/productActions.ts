@@ -17,19 +17,32 @@ interface PaginatedProducts {
   totalPages: number;
 }
 
-// Custom interface for Atlas Search to avoid using 'any'
+/** 
+ * Custom interface for Atlas Search compound queries.
+ * This avoids 'any' and supports combined search + filter.
+ */
 interface AtlasSearchStage {
   $search: {
     index: string;
-    text: {
-      query: string;
-      path: string;
-      fuzzy?: { maxEdits: number };
+    compound: {
+      must: Array<{
+        text: {
+          query: string;
+          path: string;
+          fuzzy?: { maxEdits: number };
+        };
+      }>;
+      filter?: Array<{
+        text: {
+          query: string;
+          path: string;
+        };
+      }>;
     };
   };
 }
 
-// 2. Add Product Action
+// 2. Add Product Action (No changes needed here)
 export async function addProduct(formData: FormData): Promise<ActionResponse> {
   try {
     await connectDB();
@@ -61,23 +74,41 @@ export async function addProduct(formData: FormData): Promise<ActionResponse> {
   }
 }
 
-// 3. Get Products Action (with Search)
-export async function getProducts(page: number = 1, query: string = ""): Promise<PaginatedProducts> {
+// 3. Get Products Action (Updated for Category + Search)
+export async function getProducts(
+  page: number = 1,
+  query: string = "",
+  category: string = ""
+): Promise<PaginatedProducts> {
   try {
     await connectDB();
     const limit = 9;
     const skip = (page - 1) * limit;
 
+    // Use Atlas Search if there is a text query
     if (query.trim()) {
-      // We define the pipeline using a Union type to satisfy ESLint
+      const mustMatch = [
+        {
+          text: {
+            query: query,
+            path: "name",
+            fuzzy: { maxEdits: 1 },
+          },
+        },
+      ];
+
+      // Create filter array only if a category is selected
+      const filterMatch = category.trim() 
+        ? [{ text: { query: category, path: "category" } }] 
+        : undefined;
+
       const pipeline: (PipelineStage | AtlasSearchStage)[] = [
         {
           $search: {
             index: "default",
-            text: {
-              query: query,
-              path: "name",
-              fuzzy: { maxEdits: 1 },
+            compound: {
+              must: mustMatch,
+              ...(filterMatch && { filter: filterMatch }),
             },
           },
         },
@@ -89,7 +120,6 @@ export async function getProducts(page: number = 1, query: string = ""): Promise
         },
       ];
 
-      // We cast the aggregate result to a specific structure
       const result = await Product.aggregate<{
         metadata: { total: number }[];
         data: IProduct[];
@@ -102,15 +132,23 @@ export async function getProducts(page: number = 1, query: string = ""): Promise
         products: JSON.parse(JSON.stringify(products)) as IProduct[],
         totalPages: Math.ceil(totalCount / limit),
       };
-    } else {
-      // Normal fetch
-      const products = await Product.find({})
+    } 
+    
+    // Default: Use standard Mongoose find if no search query
+    else {
+      // Build standard filter object
+      const filterObj: { category?: string } = {};
+      if (category.trim()) {
+        filterObj.category = category;
+      }
+
+      const products = await Product.find(filterObj)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean();
 
-      const totalCount = await Product.countDocuments();
+      const totalCount = await Product.countDocuments(filterObj);
 
       return {
         products: JSON.parse(JSON.stringify(products)) as IProduct[],
@@ -123,7 +161,7 @@ export async function getProducts(page: number = 1, query: string = ""): Promise
   }
 }
 
-// 4. Get Product By ID Action
+// 4. Get Product By ID Action (No changes needed here)
 export async function getProductById(id: string): Promise<IProduct | null> {
   try {
     await connectDB();
