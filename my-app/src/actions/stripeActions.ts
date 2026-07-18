@@ -12,11 +12,24 @@ export async function createCheckoutSession(productId: string) {
   try {
     await connectDB();
 
-    // 1. Get Product Details from DB (Never trust client-side prices)
+    // 1. Get Product Details from DB
     const product = await Product.findById(productId);
     if (!product) throw new Error("Product not found");
 
-    // 2. Create Stripe Session
+    /**
+     * 2. FIX: Image URL Validation
+     * Stripe requires images to be absolute HTTPS URLs under 2048 characters.
+     * Base64 strings (data:image...) are too long and will crash the request.
+     */
+    const productImage = product.image;
+    const isValidUrl = 
+      productImage && 
+      productImage.startsWith("http") && 
+      productImage.length <= 2000;
+
+    const imagesArray = isValidUrl ? [productImage] : [];
+
+    // 3. Create Stripe Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -25,8 +38,8 @@ export async function createCheckoutSession(productId: string) {
             currency: "usd",
             product_data: {
               name: product.name,
-              images: [product.image],
               description: product.description,
+              images: imagesArray, // Only pass valid public URLs
             },
             unit_amount: Math.round(product.price * 100), // Stripe uses cents
           },
@@ -34,12 +47,15 @@ export async function createCheckoutSession(productId: string) {
         },
       ],
       mode: "payment",
+      // Use environment variable for the base URL
       success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/client-dashboard`,
-      metadata: { productId }, // Attach ID to find it in webhook
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/client-dashboard/${productId}`,
+      metadata: { 
+        productId: productId.toString() 
+      },
     });
 
-    // 3. Create Pending Order in our DB
+    // 4. Create Pending Order in our DB
     await Order.create({
       productId: product._id,
       amount: product.price,
@@ -48,8 +64,10 @@ export async function createCheckoutSession(productId: string) {
     });
 
     return { url: session.url };
-  } catch (error) {
-    console.error("Stripe Error:", error);
+  } catch (error: unknown) {
+    // Improved logging for production debugging
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Stripe Error:", message);
     throw new Error("Could not initiate payment");
   }
 }

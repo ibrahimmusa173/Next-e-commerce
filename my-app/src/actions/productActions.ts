@@ -165,11 +165,13 @@ export async function getProducts(
 export async function getProductById(id: string): Promise<IProduct | null> {
   try {
     await connectDB();
-    const product = await Product.findById(id).lean();
+    const product = await Product.findById(id).lean(); // .lean() converts to JS object
     if (!product) return null;
+
+    // CRITICAL: Convert MongoDB objects to plain strings for the frontend
     return JSON.parse(JSON.stringify(product)) as IProduct;
-  } catch (error: unknown) {
-    console.error("Detail Error:", error instanceof Error ? error.message : "Unknown error");
+  } catch (error) {
+    console.error(error);
     return null;
   }
 }
