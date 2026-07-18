@@ -8,7 +8,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
 export async function POST(req: Request) {
   const body = await req.text();
-  const signature = req.headers.get("stripe-signature") as string;
+  const signature = req.headers.get("stripe-signature");
+
+  if (!signature) {
+    return NextResponse.json({ error: "No signature" }, { status: 400 });
+  }
 
   let event: Stripe.Event;
 
@@ -18,13 +22,16 @@ export async function POST(req: Request) {
       signature,
       process.env.STRIPE_WEBHOOK_SECRET as string
     );
-  } catch (err: any) {
-    return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
+  } catch (err: unknown) {
+    // FIXED: Use 'unknown' instead of 'any' to satisfy ESLint
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: `Webhook Error: ${errorMessage}` }, { status: 400 });
   }
 
   // Handle successful payment
   if (event.type === "checkout.session.completed") {
-    const session = event.data.object as Stripe.CheckoutSession;
+    // FIXED: Correct Stripe type is Stripe.Checkout.Session
+    const session = event.data.object as Stripe.Checkout.Session;
     
     await connectDB();
     
