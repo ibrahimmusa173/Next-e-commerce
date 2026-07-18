@@ -1,40 +1,39 @@
 // src/lib/mongoose.ts
 import mongoose, { Mongoose } from "mongoose";
 
-const MONGODB_URI = process.env.MONGODB_URI;
+// Standardized name matching your Auth and GitHub Secrets
+const MONGODB_URI = process.env.MONGODB_ATLAS_URI;
 
-if (!MONGODB_URI) {
-  throw new Error("Please define the MONGODB_URI environment variable");
-}
-
-/**
- * Safely define types for global cached mongoose instance
- */
 interface MongooseCache {
   conn: Mongoose | null;
   promise: Promise<Mongoose> | null;
 }
 
-// Global declaration for TypeScript
 declare global {
-  // FIXED: Removed the unnecessary eslint-disable comment
+  // FIXED: Removed the eslint-disable comment that was causing the warning
   var mongooseCache: MongooseCache | undefined;
 }
 
-// Use globalThis for better compatibility in serverless environments
 let cached = global.mongooseCache;
 
 if (!cached) {
   cached = global.mongooseCache = { conn: null, promise: null };
 }
 
-async function connectDB(): Promise<Mongoose> {
+async function connectDB(): Promise<Mongoose | null> {
+  // Logic: Don't throw error during 'next build' if URI is missing
+  if (!MONGODB_URI) {
+    if (process.env.NODE_ENV === "production") {
+      console.warn("MONGODB_ATLAS_URI is missing. Skipping connection for build.");
+    }
+    return null;
+  }
+
   if (cached!.conn) return cached!.conn;
 
   if (!cached!.promise) {
     const opts = {
       bufferCommands: false,
-      // Helps stop the 30000ms timeout by failing faster if blocked
       serverSelectionTimeoutMS: 5000, 
     };
 
@@ -46,7 +45,7 @@ async function connectDB(): Promise<Mongoose> {
   try {
     cached!.conn = await cached!.promise;
   } catch (e) {
-    cached!.promise = null; // Reset promise on failure
+    cached!.promise = null; 
     throw e;
   }
   
