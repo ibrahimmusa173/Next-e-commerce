@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProductById } from "@/actions/productActions";
+import BuyNowButton from "@/app/components/client/BuyNowButton"; 
 
 interface ProductPageProps {
   params: Promise<{ id: string }>;
@@ -76,7 +77,9 @@ export default async function ProductDetailsPage({ params }: ProductPageProps) {
 
               {/* Action Button */}
               <button className="mt-8 w-full bg-cyan-600 hover:bg-cyan-500 text-white py-4 rounded-2xl font-bold text-md transition-all shadow-lg shadow-cyan-950/50 flex items-center justify-center gap-2 active:scale-95">
-                Add to Shopping Cart
+                <div className="mt-4">
+                    <BuyNowButton productId={product._id.toString()} />
+                </div>
               </button>
             </div>
           </div>
