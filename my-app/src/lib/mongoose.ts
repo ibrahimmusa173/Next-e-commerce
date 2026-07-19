@@ -34,7 +34,7 @@ async function connectDB(): Promise<Mongoose | null> {
   if (!cached!.promise) {
     const opts = {
       bufferCommands: false,
-      serverSelectionTimeoutMS: 5000, 
+      serverSelectionTimeoutMS: 60000, 
     };
 
     cached!.promise = mongoose.connect(MONGODB_URI as string, opts).then((instance: Mongoose) => {
