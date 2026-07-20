@@ -1,0 +1,10 @@
+{
+  "rateLimits": [
+    {
+      "path": "/(.*)",
+      "limit": 20,
+      "window": "1m",
+      "algorithm": "fixed-window"
+    }
+  ]
+}
