@@ -4,7 +4,7 @@
 import { PipelineStage } from "mongoose";
 import connectDB from "@/lib/mongoose";
 import Product, { IProduct } from "@/lib/models/Product";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
 
 // 1. Interfaces
 interface ActionResponse {
@@ -17,10 +17,6 @@ interface PaginatedProducts {
   totalPages: number;
 }
 
-/** 
- * Custom interface for Atlas Search compound queries.
- * This avoids 'any' and supports combined search + filter.
- */
 interface AtlasSearchStage {
   $search: {
     index: string;
@@ -42,7 +38,7 @@ interface AtlasSearchStage {
   };
 }
 
-// 2. Add Product Action (No changes needed here)
+// 2. Add Product Action
 export async function addProduct(formData: FormData): Promise<ActionResponse> {
   try {
     await connectDB();
@@ -65,6 +61,7 @@ export async function addProduct(formData: FormData): Promise<ActionResponse> {
       image,
     });
 
+    // Automatically purges the network data caches on new upload
     revalidatePath("/client-dashboard");
     return { success: true };
   } catch (error: unknown) {
@@ -74,8 +71,8 @@ export async function addProduct(formData: FormData): Promise<ActionResponse> {
   }
 }
 
-// 3. Get Products Action (Updated for Category + Search)
-export async function getProducts(
+// Internal worker function to query MongoDB cluster
+async function fetchProductsFromDB(
   page: number = 1,
   query: string = "",
   category: string = ""
@@ -85,7 +82,6 @@ export async function getProducts(
     const limit = 9;
     const skip = (page - 1) * limit;
 
-    // Use Atlas Search if there is a text query
     if (query.trim()) {
       const mustMatch = [
         {
@@ -97,7 +93,6 @@ export async function getProducts(
         },
       ];
 
-      // Create filter array only if a category is selected
       const filterMatch = category.trim() 
         ? [{ text: { query: category, path: "category" } }] 
         : undefined;
@@ -133,10 +128,7 @@ export async function getProducts(
         totalPages: Math.ceil(totalCount / limit),
       };
     } 
-    
-    // Default: Use standard Mongoose find if no search query
     else {
-      // Build standard filter object
       const filterObj: { category?: string } = {};
       if (category.trim()) {
         filterObj.category = category;
@@ -161,14 +153,25 @@ export async function getProducts(
   }
 }
 
-// 4. Get Product By ID Action (No changes needed here)
+// 3. Cache-wrapped Get Products Action (Exposed to the frontend)
+export const getProducts = unstable_cache(
+  async (page: number = 1, query: string = "", category: string = "") => {
+    return fetchProductsFromDB(page, query, category);
+  },
+  ["client-products-dashboard-cache"], 
+  {
+    revalidate: 60, // Caches search results on CDN edge for 60 seconds
+    tags: ["products"]
+  }
+);
+
+// 4. Get Product By ID Action
 export async function getProductById(id: string): Promise<IProduct | null> {
   try {
     await connectDB();
-    const product = await Product.findById(id).lean(); // .lean() converts to JS object
+    const product = await Product.findById(id).lean();
     if (!product) return null;
 
-    // CRITICAL: Convert MongoDB objects to plain strings for the frontend
     return JSON.parse(JSON.stringify(product)) as IProduct;
   } catch (error) {
     console.error(error);
