@@ -1,39 +1,54 @@
+// src/lib/dbconnect.ts
 import { MongoClient } from "mongodb";
 
 const uri = process.env.MONGODB_ATLAS_URI;
 const dbName = process.env.MONGODB_DB || "ecommerce2";
 
-if (!uri) {
-  throw new Error("Please define the MONGODB_ATLAS_URI environment variable inside .env.production");
+if (!uri && process.env.NODE_ENV === "production") {
+  console.warn("MONGODB_ATLAS_URI is missing. Skipping connection for build.");
 }
 
-/**
- * globalWithMongo is marked 'const' to satisfy ESLint.
- * It caches the connection promise in development to prevent connection leaks.
- */
-const globalWithMongo = global as typeof globalThis & {
-  _mongoClientPromise?: Promise<MongoClient>;
-};
+interface MongoClientCache {
+  conn: MongoClient | null;
+  promise: Promise<MongoClient> | null;
+}
 
-let clientPromise: Promise<MongoClient>;
+declare global {
+  var mongoCache: MongoClientCache | undefined;
+}
 
-if (process.env.NODE_ENV === "development") {
-  // In development mode, use a global variable to preserve the connection
-  if (!globalWithMongo._mongoClientPromise) {
-    const client = new MongoClient(uri);
-    globalWithMongo._mongoClientPromise = client.connect();
-  }
-  clientPromise = globalWithMongo._mongoClientPromise;
-} else {
-  // In production mode, it's best to not use a global variable.
-  const client = new MongoClient(uri);
-  clientPromise = client.connect();
+// FIX: Changed 'let' to 'const' to satisfy ESLint's prefer-const rule
+const cached: MongoClientCache = global.mongoCache || { conn: null, promise: null };
+
+if (!global.mongoCache) {
+  global.mongoCache = cached;
 }
 
 export async function connectToDatabase() {
-  const connection = await clientPromise;
-  const db = connection.db(dbName);
-  return { client: connection, db };
+  if (!uri) return { client: null, db: null };
+
+  if (cached.conn) {
+    return { client: cached.conn, db: cached.conn.db(dbName) };
+  }
+
+  if (!cached.promise) {
+    const opts = {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 60000, 
+    };
+
+    const client = new MongoClient(uri, opts);
+    cached.promise = client.connect();
+  }
+
+  try {
+    cached.conn = await cached.promise;
+  } catch (e) {
+    cached.promise = null; 
+    throw e;
+  }
+
+  return { client: cached.conn, db: cached.conn.db(dbName) };
 }
 
 export default connectToDatabase;
