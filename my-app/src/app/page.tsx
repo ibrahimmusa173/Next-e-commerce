@@ -1,5 +1,8 @@
 ﻿import Link from "next/link";
 
+// 💡 CONFIGURE CACHE HERE: Cache this landing page globally at the CDN for 24 hours (86400 seconds)
+export const revalidate = 86400;
+
 export default function Home() {
   return (
     <main className="relative min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6 overflow-hidden">
