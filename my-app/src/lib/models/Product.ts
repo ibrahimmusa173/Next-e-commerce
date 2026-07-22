@@ -10,6 +10,7 @@ export interface IProduct {
   category: string;
   image: string;
   createdAt: Date;
+  stock: number;
 }
 
 // 2. Define the Mongoose Document type (omit _id to avoid the conflict error)
@@ -22,6 +23,7 @@ const ProductSchema = new Schema<IProductDocument>({
   category: { type: String, required: true },
   image: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
+  stock: { type: Number, required: true, default: 0 },
 });
 
 // 3. Create the model
