@@ -1,8 +1,8 @@
-// src/app/api/webhooks/stripe/route.ts
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import connectDB from "@/lib/mongoose";
 import Order from "@/lib/models/Order";
+import { inngest } from "@/lib/inngest"; // 🆕 Import queue client
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
@@ -23,25 +23,34 @@ export async function POST(req: Request) {
       process.env.STRIPE_WEBHOOK_SECRET as string
     );
   } catch (err: unknown) {
-    // FIXED: Use 'unknown' instead of 'any' to satisfy ESLint
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: `Webhook Error: ${errorMessage}` }, { status: 400 });
   }
 
-  // Handle successful payment
   if (event.type === "checkout.session.completed") {
-    // FIXED: Correct Stripe type is Stripe.Checkout.Session
     const session = event.data.object as Stripe.Checkout.Session;
     
     await connectDB();
     
-    // Find the order by session ID and mark as paid
     await Order.findOneAndUpdate(
       { stripeSessionId: session.id },
       { status: "paid" }
     );
     
     console.log(`Order for session ${session.id} marked as PAID`);
+
+    // 🆕 Extract metadata and send a job message to the queue asynchronously
+    const productId = session.metadata?.productId;
+    if (productId) {
+      await inngest.send({
+        name: "order.payment_success",
+        data: {
+          productId: productId,
+          quantity: 1, // Matches line item allocation inside your Server Action
+        },
+      });
+      console.log(`Dispatched stock reduction message for product ${productId} to the queue`);
+    }
   }
 
   return NextResponse.json({ received: true });

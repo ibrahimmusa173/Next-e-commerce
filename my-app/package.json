@@ -13,6 +13,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "bcryptjs": "^3.0.3",
+    "inngest": "^4.13.0",
     "jsonwebtoken": "^9.0.3",
     "mongodb": "^6.21.0",
     "mongoose": "^9.7.4",
