@@ -16,6 +16,12 @@ export default async function VerifyEmailPage({ searchParams }: SearchParamsProp
   }
 
   const { db } = await connectToDatabase();
+  
+  // ✅ FIX: Check if db is null before using it
+  if (!db) {
+    return <div className="text-white p-10 text-center">Database connection error. Please try again later.</div>;
+  }
+
   const user = await db.collection("users").findOne({ email, verificationToken: token });
 
   if (!user) {
