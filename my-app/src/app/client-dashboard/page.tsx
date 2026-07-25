@@ -1,23 +1,22 @@
 // src/app/client-dashboard/page.tsx
 import Link from "next/link";
-import { getProducts } from "@/actions/productActions";
-import ProductCard from "@/app/components/client/ProductCard";
+import { Suspense } from "react";
 import Search from "@/app/components/client/Search";
-import CategoryFilter from "@/app/components/client/CategoryFilter"; // Import here
-import { IProduct } from "@/lib/models/Product";
+import CategoryFilter from "@/app/components/client/CategoryFilter";
+import ProductList, { ProductListSkeleton } from "@/app/components/client/ProductList";
 
 interface DashboardProps {
   searchParams: Promise<{ page?: string; query?: string; category?: string }>;
 }
 
 export default async function ClientDashboard({ searchParams }: DashboardProps) {
+  // 1. Await the params
   const resolvedParams = await searchParams;
-  const currentPage = Number(resolvedParams.page) || 1;
+  
+  // 2. Extract values with fallbacks to satisfy TypeScript
   const query = resolvedParams.query || "";
   const category = resolvedParams.category || "";
-  
-  // Pass category to the updated server action
-  const { products, totalPages } = await getProducts(currentPage, query, category);
+  const page = resolvedParams.page || "1";
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-10">
@@ -36,49 +35,23 @@ export default async function ClientDashboard({ searchParams }: DashboardProps) 
           </Link>
         </div>
 
-        {/* Category Filter Component */}
         <CategoryFilter />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-6 border-t border-slate-800">
-          {products.length > 0 ? (
-            products.map((product: IProduct) => (
-              <ProductCard key={product._id.toString()} product={product} />
-            ))
-          ) : (
-            <div className="col-span-full text-center py-20 text-slate-500">
-              No products found matching &quot;{query || category}&quot;
-            </div>
-          )}
-        </div>
+        {/* 
+           3. Use the extracted variables here. 
+           The 'key' ensures Suspense triggers every time the URL changes.
+        */}
+        <Suspense 
+          key={`${query}-${category}-${page}`} 
+          fallback={<ProductListSkeleton />}
+        >
+          <ProductList 
+            currentPage={Number(page)}
+            query={query}
+            category={category}
+          />
+        </Suspense>
 
-        {/* Updated Pagination to preserve category */}
-        {totalPages > 1 && (
-          <div className="mt-12 flex justify-center items-center gap-2 pt-8 border-t border-slate-800">
-            {Array.from({ length: totalPages }, (_, i) => {
-              const pageNum = i + 1;
-              const isActive = currentPage === pageNum;
-              
-              const params = new URLSearchParams();
-              params.set("page", pageNum.toString());
-              if (query) params.set("query", query);
-              if (category) params.set("category", category);
-
-              return (
-                <Link
-                  key={pageNum}
-                  href={`/client-dashboard?${params.toString()}`}
-                  className={`w-10 h-10 flex items-center justify-center rounded-xl font-bold transition-all ${
-                    isActive 
-                    ? "bg-cyan-600 text-white shadow-lg shadow-cyan-900/40" 
-                    : "bg-slate-800 text-slate-500 hover:bg-slate-700 border border-slate-700"
-                  }`}
-                >
-                  {pageNum}
-                </Link>
-              );
-            })}
-          </div>
-        )}
       </section>
     </main>
   );
