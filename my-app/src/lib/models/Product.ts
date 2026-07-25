@@ -26,6 +26,7 @@ const ProductSchema = new Schema<IProductDocument>({
   stock: { type: Number, required: true, default: 0 },
 });
 
+ProductSchema.index({ category: 1, createdAt: -1 });
 // 3. Create the model
 const Product = models.Product || model<IProductDocument>("Product", ProductSchema);
 

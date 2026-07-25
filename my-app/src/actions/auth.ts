@@ -4,18 +4,28 @@ import { signIn, signOut } from "@/auth";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import jwt from "jsonwebtoken";
-import crypto from "crypto"; // Built-in Node.js module
+import crypto from "crypto";
 import { connectToDatabase } from "@/lib/dbconnect";
-import { sendEmail } from "@/lib/mailer"; // Your mailer utility
+import { sendEmail } from "@/lib/mailer";
 import {
   comparePassword,
   hashPassword,
   validateLoginPayload,
   validateUserPayload,
 } from "@/lib/models/user";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123";
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+
+// Helper to ensure DB is connected or throw error
+async function getDb() {
+  const { db } = await connectToDatabase();
+  if (!db) {
+    throw new Error("Database connection failed");
+  }
+  return db;
+}
 
 // --- SIGNUP ACTION ---
 export async function signupAction(formData: FormData) {
@@ -27,7 +37,7 @@ export async function signupAction(formData: FormData) {
     const payload = validateUserPayload(rawData);
     const isAdmin = formData.get("isAdmin") === "on";
 
-    const { db } = await connectToDatabase();
+    const db = await getDb(); // Using helper to avoid null check repetition
     
     const existingUser = await db.collection("users").findOne({
       $or: [{ username: payload.username }, { email: payload.email }],
@@ -45,12 +55,11 @@ export async function signupAction(formData: FormData) {
         email: payload.email,
         password: hashedPassword,
         role: isAdmin ? "admin" : "client",
-        isVerified: false, // User starts unverified
+        isVerified: false,
         verificationToken,
         createdAt: new Date(),
       });
 
-      // Send Verification Email
       const verifyUrl = `${BASE_URL}/verify-email?token=${verificationToken}&email=${payload.email}`;
       await sendEmail(
         payload.email,
@@ -63,6 +72,7 @@ export async function signupAction(formData: FormData) {
       success = true;
     }
   } catch (error: unknown) {
+    if (isRedirectError(error)) throw error;
     errorMessage = error instanceof Error ? error.message : "Could not create account.";
   }
 
@@ -82,13 +92,12 @@ export async function loginAction(formData: FormData) {
     const rawData = Object.fromEntries(formData.entries());
     const payload = validateLoginPayload(rawData);
     
-    const { db } = await connectToDatabase();
+    const db = await getDb();
     const user = await db.collection("users").findOne({ username: payload.username });
 
     if (!user || !(await comparePassword(payload.password, user.password as string))) {
       errorMessage = "Invalid username or password";
     } else if (!user.isVerified) {
-      // Check if user is verified
       errorMessage = "Please verify your email before logging in.";
     } else {
       const token = jwt.sign(
@@ -109,6 +118,7 @@ export async function loginAction(formData: FormData) {
       targetRoute = user.role === "admin" ? "/admin-dashboard" : "/client-dashboard";
     }
   } catch (error: unknown) {
+    if (isRedirectError(error)) throw error;
     errorMessage = error instanceof Error ? error.message : "Login failed.";
   }
 
@@ -124,12 +134,12 @@ export async function forgotPasswordAction(formData: FormData) {
   const email = formData.get("email") as string;
   
   try {
-    const { db } = await connectToDatabase();
+    const db = await getDb();
     const user = await db.collection("users").findOne({ email });
 
     if (user) {
       const resetToken = crypto.randomBytes(32).toString("hex");
-      const resetExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+      const resetExpiry = new Date(Date.now() + 3600000); 
 
       await db.collection("users").updateOne(
         { email },
@@ -140,30 +150,27 @@ export async function forgotPasswordAction(formData: FormData) {
       await sendEmail(
         email,
         "Password Reset Request",
-        `<p>You requested a password reset. Click the link below to set a new password. This link expires in 1 hour.</p>
+        `<p>You requested a password reset. Click the link below to set a new password.</p>
          <a href="${resetUrl}">${resetUrl}</a>`
       );
     }
   } catch (error) {
+    if (isRedirectError(error)) throw error;
     console.error("Forgot password error:", error);
   }
 
-  // We redirect with a success message regardless of whether the email exists for security
   redirect("/login?message=If+an+account+exists,+a+reset+link+has+been+sent.");
 }
 
 // --- RESET PASSWORD ACTION ---
-import { isRedirectError } from "next/dist/client/components/redirect-error";
-
 export async function resetPasswordAction(formData: FormData) {
-  const email = (formData.get("email") as string)?.toLowerCase(); // Normalize email
+  const email = (formData.get("email") as string)?.toLowerCase();
   const token = formData.get("token") as string;
   const newPassword = formData.get("password") as string;
 
   try {
-    const { db } = await connectToDatabase();
+    const db = await getDb();
     
-    // 1. Find the user with matching token and check if expiry is still in the future
     const user = await db.collection("users").findOne({ 
       email, 
       resetToken: token, 
@@ -174,10 +181,8 @@ export async function resetPasswordAction(formData: FormData) {
       redirect("/login?error=Invalid+or+expired+reset+link.");
     }
 
-    // 2. Hash the new password
     const hashedPassword = await hashPassword(newPassword);
 
-    // 3. Update the password and clear the reset fields
     await db.collection("users").updateOne(
       { _id: user._id },
       { 
@@ -186,15 +191,12 @@ export async function resetPasswordAction(formData: FormData) {
       }
     );
 
-    // 4. Success redirect
     redirect("/login?message=Password+successfully+updated.+You+can+now+login.");
 
   } catch (error: unknown) {
-    // Check if the thrown error is an internal Next.js redirect
     if (isRedirectError(error)) {
       throw error;
     }
-    
     console.error("Reset Password Error:", error);
     redirect("/login?error=Something+went+wrong+during+password+reset.");
   }
