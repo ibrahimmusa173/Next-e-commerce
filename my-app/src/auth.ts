@@ -34,6 +34,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       try {
         const { db } = await connectToDatabase();
+        
+        // ✅ FIX 1: Prevent crash if database connection failed
+        if (!db) {
+          console.error("Sign in failed: Database connection is unavailable.");
+          return false;
+        }
+
         const usersCollection = db.collection("users");
         const existingUser = await usersCollection.findOne({ email: profile.email.toLowerCase() });
 
@@ -57,18 +64,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
     },
     
-    // Fixed: Removed '_user' from the destructuring list to clear the ESLint flag
     async jwt({ token }) {
       if (!token.role) {
         try {
           const { db } = await connectToDatabase();
+          
+          // ✅ FIX 2: Throws to catch block if db is null, safely assigning a fallback role
+          if (!db) {
+            throw new Error("Database connection unavailable during JWT generation.");
+          }
+
           const userData = await db.collection("users").findOne({ email: token.email?.toLowerCase() });
           if (userData) {
             token.role = userData.role || "client";
             token.username = userData.username;
           }
         } catch {
-          // Fixed: Removed the unused 'err' parameter variable binding name completely
           token.role = "client"; 
         }
       }
